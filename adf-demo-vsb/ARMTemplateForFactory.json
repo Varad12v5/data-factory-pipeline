@@ -33,7 +33,7 @@
 	},
 	"resources": [
 		{
-			"name": "[concat(parameters('factoryName'), '/pipeline1')]",
+			"name": "[concat(parameters('factoryName'), '/BulkTableCopyPipeline')]",
 			"type": "Microsoft.DataFactory/factories/pipelines",
 			"apiVersion": "2018-06-01",
 			"properties": {
@@ -301,6 +301,100 @@
 				}
 			},
 			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/NotificationPipeline')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"activities": [
+					{
+						"name": "EmailPipeline",
+						"type": "ExecutePipeline",
+						"dependsOn": [],
+						"policy": {
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"pipeline": {
+								"referenceName": "BulkTableCopyPipeline",
+								"type": "PipelineReference"
+							},
+							"waitOnCompletion": true,
+							"parameters": {}
+						}
+					},
+					{
+						"name": "Success Email",
+						"type": "WebActivity",
+						"dependsOn": [
+							{
+								"activity": "EmailPipeline",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"method": "POST",
+							"headers": {},
+							"url": "https://prod-08.westeurope.logic.azure.com:443/workflows/2d3e512005f14a6e9f5eebf975d85b7f/triggers/When_an_HTTP_request_is_received/paths/invoke?api-version=2016-10-01&sp=%2Ftriggers%2FWhen_an_HTTP_request_is_received%2Frun&sv=1.0&sig=Wle3zaAZ1lXn1VrVO_JrMqaJhWbyGk7Q-7CloDTIiE0",
+							"body": {
+								"value": "{\n    \"title\": \"@{activity('EmailPipeline').output.pipelineName} SUCCEEDED!\",\n    \"message\": \"Pipeline run finished successfully!\",\n    \"color\": \"Green\",\n    \"dataFactoryName\": \"@{pipeline().DataFactory}\",\n    \"pipelineName\": \"@{pipeline().Pipeline}\",\n    \"pipelineRunId\": \"@{pipeline().RunId}\",\n    \"time\": \"@{utcNow()}\"\n}",
+								"type": "Expression"
+							}
+						}
+					},
+					{
+						"name": "Fail Email",
+						"type": "WebActivity",
+						"dependsOn": [
+							{
+								"activity": "EmailPipeline",
+								"dependencyConditions": [
+									"Failed"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"method": "POST",
+							"headers": {},
+							"url": "https://prod-08.westeurope.logic.azure.com:443/workflows/2d3e512005f14a6e9f5eebf975d85b7f/triggers/When_an_HTTP_request_is_received/paths/invoke?api-version=2016-10-01&sp=%2Ftriggers%2FWhen_an_HTTP_request_is_received%2Frun&sv=1.0&sig=Wle3zaAZ1lXn1VrVO_JrMqaJhWbyGk7Q-7CloDTIiE0",
+							"body": {
+								"value": "{\n    \"title\": \"@{activity('EmailPipeline').output.pipelineName} Failed\",\n    \"message\": \"Error: @{activity('EmailPipeline').error.message}\",\n    \"color\": \"Red\",\n    \"dataFactoryName\": \"@{pipeline().DataFactory}\",\n    \"pipelineName\": \"@{pipeline().Pipeline}\",\n    \"pipelineRunId\": \"@{pipeline().RunId}\",\n    \"time\": \"@{utcNow()}\"\n}",
+								"type": "Expression"
+							}
+						}
+					}
+				],
+				"policy": {
+					"elapsedTimeMetric": {}
+				},
+				"folder": {
+					"name": "Notification"
+				},
+				"annotations": []
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/pipelines/BulkTableCopyPipeline')]"
+			]
 		}
 	]
 }
