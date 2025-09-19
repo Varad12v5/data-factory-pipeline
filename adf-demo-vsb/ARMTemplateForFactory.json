@@ -170,6 +170,100 @@
 			]
 		},
 		{
+			"name": "[concat(parameters('factoryName'), '/NotificationPipeline')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"activities": [
+					{
+						"name": "EmailPipeline",
+						"type": "ExecutePipeline",
+						"dependsOn": [],
+						"policy": {
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"pipeline": {
+								"referenceName": "BulkTableCopyPipeline",
+								"type": "PipelineReference"
+							},
+							"waitOnCompletion": true,
+							"parameters": {}
+						}
+					},
+					{
+						"name": "Success Email",
+						"type": "WebActivity",
+						"dependsOn": [
+							{
+								"activity": "EmailPipeline",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"method": "POST",
+							"headers": {},
+							"url": "https://prod-08.westeurope.logic.azure.com:443/workflows/2d3e512005f14a6e9f5eebf975d85b7f/triggers/When_an_HTTP_request_is_received/paths/invoke?api-version=2016-10-01&sp=%2Ftriggers%2FWhen_an_HTTP_request_is_received%2Frun&sv=1.0&sig=Wle3zaAZ1lXn1VrVO_JrMqaJhWbyGk7Q-7CloDTIiE0",
+							"body": {
+								"value": "{\n    \"title\": \"@{activity('EmailPipeline').output.pipelineName} SUCCEEDED!\",\n    \"message\": \"Pipeline run finished successfully!\",\n    \"color\": \"Green\",\n    \"dataFactoryName\": \"@{pipeline().DataFactory}\",\n    \"pipelineName\": \"@{pipeline().Pipeline}\",\n    \"pipelineRunId\": \"@{pipeline().RunId}\",\n    \"time\": \"@{utcNow()}\"\n}",
+								"type": "Expression"
+							}
+						}
+					},
+					{
+						"name": "Fail Email",
+						"type": "WebActivity",
+						"dependsOn": [
+							{
+								"activity": "EmailPipeline",
+								"dependencyConditions": [
+									"Failed"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"method": "POST",
+							"headers": {},
+							"url": "https://prod-08.westeurope.logic.azure.com:443/workflows/2d3e512005f14a6e9f5eebf975d85b7f/triggers/When_an_HTTP_request_is_received/paths/invoke?api-version=2016-10-01&sp=%2Ftriggers%2FWhen_an_HTTP_request_is_received%2Frun&sv=1.0&sig=Wle3zaAZ1lXn1VrVO_JrMqaJhWbyGk7Q-7CloDTIiE0",
+							"body": {
+								"value": "{\n    \"title\": \"@{activity('EmailPipeline').output.pipelineName} Failed\",\n    \"message\": \"Error: @{activity('EmailPipeline').error.message}\",\n    \"color\": \"Red\",\n    \"dataFactoryName\": \"@{pipeline().DataFactory}\",\n    \"pipelineName\": \"@{pipeline().Pipeline}\",\n    \"pipelineRunId\": \"@{pipeline().RunId}\",\n    \"time\": \"@{utcNow()}\"\n}",
+								"type": "Expression"
+							}
+						}
+					}
+				],
+				"policy": {
+					"elapsedTimeMetric": {}
+				},
+				"folder": {
+					"name": "Notification"
+				},
+				"annotations": []
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/pipelines/BulkTableCopyPipeline')]"
+			]
+		},
+		{
 			"name": "[concat(parameters('factoryName'), '/CSVTable')]",
 			"type": "Microsoft.DataFactory/factories/datasets",
 			"apiVersion": "2018-06-01",
@@ -303,34 +397,43 @@
 			"dependsOn": []
 		},
 		{
-			"name": "[concat(parameters('factoryName'), '/NotificationPipeline')]",
+			"name": "[concat(parameters('factoryName'), '/Pipeline_to_copy_data_incrementally_from_one_Sql_Table_to_Other_Sql_table')]",
 			"type": "Microsoft.DataFactory/factories/pipelines",
 			"apiVersion": "2018-06-01",
 			"properties": {
 				"activities": [
 					{
-						"name": "EmailPipeline",
-						"type": "ExecutePipeline",
+						"name": "Lookup1",
+						"type": "Lookup",
 						"dependsOn": [],
 						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
 							"secureInput": false
 						},
 						"userProperties": [],
 						"typeProperties": {
-							"pipeline": {
-								"referenceName": "BulkTableCopyPipeline",
-								"type": "PipelineReference"
+							"source": {
+								"type": "AzureSqlSource",
+								"sqlReaderQuery": "select max(inserttime) as date1 from orders_final",
+								"queryTimeout": "02:00:00",
+								"partitionOption": "None"
 							},
-							"waitOnCompletion": true,
-							"parameters": {}
+							"dataset": {
+								"referenceName": "ILDataset",
+								"type": "DatasetReference",
+								"parameters": {}
+							}
 						}
 					},
 					{
-						"name": "Success Email",
-						"type": "WebActivity",
+						"name": "Copy data1",
+						"type": "Copy",
 						"dependsOn": [
 							{
-								"activity": "EmailPipeline",
+								"activity": "Lookup1",
 								"dependencyConditions": [
 									"Succeeded"
 								]
@@ -345,55 +448,179 @@
 						},
 						"userProperties": [],
 						"typeProperties": {
-							"method": "POST",
-							"headers": {},
-							"url": "https://prod-08.westeurope.logic.azure.com:443/workflows/2d3e512005f14a6e9f5eebf975d85b7f/triggers/When_an_HTTP_request_is_received/paths/invoke?api-version=2016-10-01&sp=%2Ftriggers%2FWhen_an_HTTP_request_is_received%2Frun&sv=1.0&sig=Wle3zaAZ1lXn1VrVO_JrMqaJhWbyGk7Q-7CloDTIiE0",
-							"body": {
-								"value": "{\n    \"title\": \"@{activity('EmailPipeline').output.pipelineName} SUCCEEDED!\",\n    \"message\": \"Pipeline run finished successfully!\",\n    \"color\": \"Green\",\n    \"dataFactoryName\": \"@{pipeline().DataFactory}\",\n    \"pipelineName\": \"@{pipeline().Pipeline}\",\n    \"pipelineRunId\": \"@{pipeline().RunId}\",\n    \"time\": \"@{utcNow()}\"\n}",
-								"type": "Expression"
+							"source": {
+								"type": "AzureSqlSource",
+								"sqlReaderQuery": {
+									"value": "select order_id,FirstName, inserttime from orders where inserttime > '@{activity('Lookup1').output.firstRow.date1}' ",
+									"type": "Expression"
+								},
+								"queryTimeout": "02:00:00",
+								"partitionOption": "None"
+							},
+							"sink": {
+								"type": "AzureSqlSink",
+								"writeBehavior": "insert",
+								"sqlWriterUseTableLock": false
+							},
+							"enableStaging": false,
+							"translator": {
+								"type": "TabularTranslator",
+								"typeConversion": true,
+								"typeConversionSettings": {
+									"allowDataTruncation": true,
+									"treatBooleanAsNumber": false
+								}
 							}
-						}
-					},
-					{
-						"name": "Fail Email",
-						"type": "WebActivity",
-						"dependsOn": [
+						},
+						"inputs": [
 							{
-								"activity": "EmailPipeline",
-								"dependencyConditions": [
-									"Failed"
-								]
+								"referenceName": "SourceDataset",
+								"type": "DatasetReference",
+								"parameters": {}
 							}
 						],
-						"policy": {
-							"timeout": "0.12:00:00",
-							"retry": 0,
-							"retryIntervalInSeconds": 30,
-							"secureOutput": false,
-							"secureInput": false
-						},
-						"userProperties": [],
-						"typeProperties": {
-							"method": "POST",
-							"headers": {},
-							"url": "https://prod-08.westeurope.logic.azure.com:443/workflows/2d3e512005f14a6e9f5eebf975d85b7f/triggers/When_an_HTTP_request_is_received/paths/invoke?api-version=2016-10-01&sp=%2Ftriggers%2FWhen_an_HTTP_request_is_received%2Frun&sv=1.0&sig=Wle3zaAZ1lXn1VrVO_JrMqaJhWbyGk7Q-7CloDTIiE0",
-							"body": {
-								"value": "{\n    \"title\": \"@{activity('EmailPipeline').output.pipelineName} Failed\",\n    \"message\": \"Error: @{activity('EmailPipeline').error.message}\",\n    \"color\": \"Red\",\n    \"dataFactoryName\": \"@{pipeline().DataFactory}\",\n    \"pipelineName\": \"@{pipeline().Pipeline}\",\n    \"pipelineRunId\": \"@{pipeline().RunId}\",\n    \"time\": \"@{utcNow()}\"\n}",
-								"type": "Expression"
+						"outputs": [
+							{
+								"referenceName": "SinkDataset",
+								"type": "DatasetReference",
+								"parameters": {}
 							}
-						}
+						]
 					}
 				],
 				"policy": {
 					"elapsedTimeMetric": {}
 				},
 				"folder": {
-					"name": "Notification"
+					"name": "Incremental Load"
 				},
 				"annotations": []
 			},
 			"dependsOn": [
-				"[concat(variables('factoryId'), '/pipelines/BulkTableCopyPipeline')]"
+				"[concat(variables('factoryId'), '/datasets/ILDataset')]",
+				"[concat(variables('factoryId'), '/datasets/SourceDataset')]",
+				"[concat(variables('factoryId'), '/datasets/SinkDataset')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/ILDataset')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "AzureSqlDatabase1",
+					"type": "LinkedServiceReference"
+				},
+				"folder": {
+					"name": "Incremental Load Dataset"
+				},
+				"annotations": [],
+				"type": "AzureSqlTable",
+				"schema": [
+					{
+						"name": "order_id",
+						"type": "int",
+						"precision": 10
+					},
+					{
+						"name": "FirstName",
+						"type": "nvarchar"
+					},
+					{
+						"name": "inserttime",
+						"type": "datetime",
+						"precision": 23,
+						"scale": 3
+					}
+				],
+				"typeProperties": {
+					"schema": "dbo",
+					"table": "orders_final"
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/AzureSqlDatabase1')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/SourceDataset')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "AzureSqlDatabase1",
+					"type": "LinkedServiceReference"
+				},
+				"folder": {
+					"name": "Incremental Load Dataset"
+				},
+				"annotations": [],
+				"type": "AzureSqlTable",
+				"schema": [
+					{
+						"name": "order_id",
+						"type": "int",
+						"precision": 10
+					},
+					{
+						"name": "FirstName",
+						"type": "nvarchar"
+					},
+					{
+						"name": "LastName",
+						"type": "nvarchar"
+					},
+					{
+						"name": "inserttime",
+						"type": "datetime",
+						"precision": 23,
+						"scale": 3
+					}
+				],
+				"typeProperties": {
+					"schema": "dbo",
+					"table": "orders"
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/AzureSqlDatabase1')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/SinkDataset')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "AzureSqlDatabase1",
+					"type": "LinkedServiceReference"
+				},
+				"annotations": [],
+				"type": "AzureSqlTable",
+				"schema": [
+					{
+						"name": "order_id",
+						"type": "int",
+						"precision": 10
+					},
+					{
+						"name": "FirstName",
+						"type": "nvarchar"
+					},
+					{
+						"name": "inserttime",
+						"type": "datetime",
+						"precision": 23,
+						"scale": 3
+					}
+				],
+				"typeProperties": {
+					"schema": "dbo",
+					"table": "orders_final"
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/AzureSqlDatabase1')]"
 			]
 		}
 	]
